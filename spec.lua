@@ -1,58 +1,68 @@
 local helpers = require "spec.helpers"
+local assert = require "luassert"
 local kong = kong
-local ngx = ngx
 
-describe("HeaderEncodePlugin", function()
+describe("Header Validation Plugin", function()
+
   local client
 
-  setup(function()
-    -- Start Kong with the plugin enabled
-    assert(helpers.start_kong({
-      plugins = "bundled,header-encode-plugin",  -- Include the plugin name here
-    }))
-  end)
-
-  teardown(function()
-    -- Stop Kong
-    helpers.stop_kong()
-  end)
-
   before_each(function()
-    -- Create a client for making requests to Kong
+    -- Set up a new client to interact with Kong
     client = helpers.proxy_client()
   end)
 
   after_each(function()
+    -- Clean up the client after the test
     if client then
       client:close()
     end
   end)
 
-  describe("when sending a request with valid headers", function()
-    it("should return the encoded headers in the response", function()
-      local res = client:get("/request_path", {
+  describe("Access phase", function()
+
+    it("returns 400 if username is missing", function()
+      local res = client:get("/test", {
         headers = {
-          username = "myuser",
-          ["user-id"] = "1234",
+          ["user-id"] = "1234"
         }
       })
-
-      assert.res_status(200, res)
-      assert.equal("bXl1c2Vy", res.headers["X-Encoded-Username"])
-      assert.equal("MTIzNA==", res.headers["X-Encoded-User-Id"])
-    end)
-  end)
-
-  describe("when sending a request with missing headers", function()
-    it("should return 400 with an error message", function()
-      local res = client:get("/request_path", {
-        headers = {
-          username = "myuser",  -- Missing user-id
-        }
-      })
-
       assert.res_status(400, res)
       assert.equal('{"message":"Missing username or user-id header"}', res.body)
     end)
+
+    it("returns 400 if user-id is missing", function()
+      local res = client:get("/test", {
+        headers = {
+          ["username"] = "john_doe"
+        }
+      })
+      assert.res_status(400, res)
+      assert.equal('{"message":"Missing username or user-id header"}', res.body)
+    end)
+
+    it("passes when both username and user-id are present", function()
+      local res = client:get("/test", {
+        headers = {
+          ["username"] = "john_doe",
+          ["user-id"] = "1234"
+        }
+      })
+      assert.res_status(200, res)
+    end)
+
+    it("adds validated headers to the downstream service", function()
+      local res = client:get("/test", {
+        headers = {
+          ["username"] = "john_doe",
+          ["user-id"] = "1234"
+        }
+      })
+      assert.res_status(200, res)
+      -- Check that the validated headers are set
+      assert.equal("john_doe", res.headers["X-Validated-User"])
+      assert.equal("1234", res.headers["X-Validated-User-Id"])
+    end)
+
   end)
+
 end)

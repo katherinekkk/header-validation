@@ -33,31 +33,7 @@ function HeaderValidationPlugin:header_filter()
   ngx.header["Content-Length"] = nil
 end
 
--- Body filter phase to encode the response body
-function HeaderValidationPlugin:body_filter()
-  local chunk = ngx.arg[1]
-  local eof = ngx.arg[2]
-
-  -- Initialize the buffer to accumulate chunks if not already initialized
-  if not ngx.ctx.buffer then
-    ngx.ctx.buffer = ""
-  end
-
-  -- Append the current chunk to the buffer
-  if chunk then
-    ngx.ctx.buffer = ngx.ctx.buffer .. chunk
-    ngx.arg[1] = nil  -- Clear the chunk to prevent it from being outputted before encoding
-  end
-
-  -- Once the response is complete (eof is true), perform encoding
-  if eof then
-    -- Encode the entire response body in Base64
-    local encoded = ngx.encode_base64(ngx.ctx.buffer)
-
-    -- Set the encoded data back into ngx.arg to be sent as the response body
-    ngx.arg[1] = encoded
-  end
-end
+-- Remove the body_filter method as the encoding logic is to be removed
 
 -- Define the plugin priority (mandatory)
 HeaderValidationPlugin.PRIORITY = 10
